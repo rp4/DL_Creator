@@ -1,9 +1,9 @@
-Name,Email,Title,Manager
+Name,Email,Title,ManagerEmail
 Alice Johnson,alice.johnson@example.com,CEO,
-Bob Smith,bob.smith@example.com,CTO,Alice Johnson
-Carol Lee,carol.lee@example.com,CFO,Alice Johnson
-David Kim,david.kim@example.com,Engineering Manager,Bob Smith
-Eva Chen,eva.chen@example.com,Software Engineer,David Kim
-Frank Wright,frank.wright@example.com,Software Engineer,David Kim
-Grace Park,grace.park@example.com,Finance Analyst,Carol Lee
-Henry Adams,henry.adams@example.com,Accountant,Carol Lee
+Bob Smith,bob.smith@example.com,CTO,alice.johnson@example.com
+Carol Lee,carol.lee@example.com,CFO,alice.johnson@example.com
+David Kim,david.kim@example.com,Engineering Manager,bob.smith@example.com
+Eva Chen,eva.chen@example.com,Software Engineer,david.kim@example.com
+Frank Wright,frank.wright@example.com,Software Engineer,david.kim@example.com
+Grace Park,grace.park@example.com,Finance Analyst,carol.lee@example.com
+Henry Adams,henry.adams@example.com,Accountant,carol.lee@example.com
