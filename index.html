@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DL Creator</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    /* Global reset and full-height */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: sans-serif;
+      background-color: #f9f9f9;
+      /* Dotted background pattern */
+      background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+    /* Initial loader area */
+    .loader {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+    }
+    .loader input[type="file"],
+    .loader input[type="text"] {
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      width: 280px;
+    }
+    /* Main header style */
+    .header {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      flex: 0 0 auto;
+    }
+    .header .title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1e3a8a;
+    }
+    .header .search-input {
+      position: relative;
+      flex: 1;
+      max-width: 500px;
+      margin: 0 1rem;
+    }
+    .header .search-input input {
+      width: 100%;
+      padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    .header .search-input svg {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1rem;
+      height: 1rem;
+      fill: #6b7280;
+    }
+    .header .actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .header .badge {
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .header .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .header .copy-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    /* Chart area */
+    #chart {
+      flex: 1;
+      overflow: hidden;
+      background: transparent;
+    }
+    .link { fill: none; stroke: #888; stroke-width: 1.5px; }
+    .node rect { fill: white; stroke: #aaa; stroke-width: 1px; rx: 8px; ry: 8px; }
+    .node.selected rect { fill: #d1fae5; }
+    .node.search-match rect { stroke: #facc15; stroke-width: 2px; }
+    .node text.name { font-weight: 600; }
+    .node text.title { font-size: 0.8em; fill: #555; }
+  </style>
+</head>
+<body>
+  <!-- Loader state: contacts then file -->
+  <div class="loader" id="loader">
+    <h1>DL Creator</h1>
+    <input type="text" id="contactsInput" placeholder="Contacts (comma-separated emails)" />
+    <input type="file" id="fileInput" accept=".csv" />
+  </div>
+
+  <!-- Main header (hidden until load) -->
+  <div class="header" id="mainHeader">
+    <h2 class="title">DL Creator</h2>
+    <div class="search-input">
+      <input type="text" id="searchInput" placeholder="Search by name or email..." />
+      <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 015.292 13.708l4.147 4.146-1.414 1.414-4.146-4.147A8 8 0 1110 2zm0 2a6 6 0 100 12 6 6 0 000-12z"/></svg>
+    </div>
+    <div class="actions">
+      <span class="badge" id="selectedCount">0 selected</span>
+      <button class="copy-btn" id="copyBtn" disabled>
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        Copy Email List
+      </button>
+    </div>
+  </div>
+
+  <svg id="chart"></svg>
+
+  <script>
+    const loader        = document.getElementById('loader');
+    const mainHeader    = document.getElementById('mainHeader');
+    const fileInput     = document.getElementById('fileInput');
+    const contactsInput = document.getElementById('contactsInput');
+    const searchInput   = document.getElementById('searchInput');
+    const selectedCount = document.getElementById('selectedCount');
+    const copyBtn       = document.getElementById('copyBtn');
+    const svg           = d3.select('#chart');
+    // Hidden default emails to always include
+    const appendList = ['alice.johnson@example.com'];
+    let g, root, preSelectList = [];
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      preSelectList = (contactsInput.value||'').split(',').map(e=>e.trim().toLowerCase()).filter(e=>e);
+      const reader = new FileReader();
+      reader.onload = e => {
+        const allData = d3.csvParse(e.target.result);
+        let displayData = allData;
+        if (preSelectList.length) {
+          const stratFull = d3.stratify().id(d=>d.Name).parentId(d=>d.Manager||null);
+          const fullRoot = stratFull(allData);
+          const allowed = new Set();
+          fullRoot.descendants().forEach(node => {
+            const email = (node.data.Email||'').toLowerCase();
+            if (preSelectList.includes(email)) {
+              let cur = node; while (cur) { allowed.add(cur.data.Name); cur = cur.parent; }
+              node.each(d => allowed.add(d.data.Name));
+            }
+          });
+          displayData = allData.filter(d => allowed.has(d.Name));
+        }
+        loader.style.display = 'none';
+        mainHeader.style.display = 'flex';
+        renderChart(displayData);
+      };
+      reader.readAsText(file);
+    });
+
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.toLowerCase();
+      svg.selectAll('.node').classed('search-match', d =>
+        q && (d.data.Name.toLowerCase().includes(q) || (d.data.Email||'').toLowerCase().includes(q))
+      );
+    });
+
+    copyBtn.addEventListener('click', () => {
+      const selectedEmails = root.descendants().filter(d=>d.data._selected).map(d=>d.data.Email);
+      const allSet = new Set([...selectedEmails, ...appendList]);
+      const emails = Array.from(allSet).join(', ');
+      navigator.clipboard.writeText(emails).then(()=>alert('Copied emails:\n'+emails));
+    });
+
+    function renderChart(data) {
+      svg.selectAll('*').remove();
+      const rectW = 140, rectH = 40;
+      const treeLayout = d3.tree().nodeSize([rectW + 20, rectH + 20]);
+      const strat = d3.stratify().id(d=>d.Name).parentId(d=>d.Manager||null);
+      root = strat(data);
+      treeLayout(root);
+      const xOffset = rectW, yOffset = rectH;
+      g = svg.append('g').attr('transform', `translate(${xOffset},${yOffset})`);
+      svg.call(d3.zoom().scaleExtent([0.5,2]).on('zoom',event=>g.attr('transform',event.transform)));
+      root.descendants().forEach(d=>{ d.data._selected = preSelectList.includes((d.data.Email||'').toLowerCase()); });
+      g.selectAll('.link').data(root.links()).join('path').attr('class','link').attr('d',d3.linkVertical().x(d=>d.x).y(d=>d.y));
+      const nodes=g.selectAll('.node').data(root.descendants()).join('g')
+        .attr('class','node')
+        .classed('selected',d=>d.data._selected)
+        .attr('transform',d=>`translate(${d.x},${d.y})`)
+        .on('click',function(event,d){ d.data._selected=!d.data._selected; d3.select(this).classed('selected',d.data._selected); updateSelectionUI(); });
+      nodes.append('rect').attr('x',-rectW/2).attr('y',-rectH/2).attr('width',rectW).attr('height',rectH);
+      nodes.append('text').attr('class','name').attr('dy','-0.3em').attr('text-anchor','middle').text(d=>d.data.Name);
+      nodes.append('text').attr('class','title').attr('dy','1em').attr('text-anchor','middle').text(d=>d.data.Title);
+      updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+      const count = root.descendants().filter(d=>d.data._selected).length;
+      selectedCount.textContent = `${count} selected`;
+      copyBtn.disabled = !count;
+    }
+  </script>
+</body>
+</html>
